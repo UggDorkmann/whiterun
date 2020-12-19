@@ -12,16 +12,20 @@
 #include <QMutex>
 #include <QDir>
 #include <QDateTime>
-static void getCenter(Point & center,float x1,float y1,float x2,float y2,Point * nxt){
+bool tmpPrint;
+bool tmpPrint2 = false;
+void Gen3DMapPoints::getCenter(Point & center,float x1,float y1,float x2,float y2,const Point * nxt){
     if(fabs(nxt->m_y - y1) < 1){// cur--nxt is horizontal
         if(fabs(nxt->m_x - x2) < 1) // nxt--far is vertical
         {
+            if(tmpPrint2) qDebug() << "cur--nxt is horizontal,nxt--far is vertical";
             center.m_x = x1;
             center.m_y = y2;
             return;
         }
         else{//normal
-            float k = -1 / ((y2 - nxt->m_y) / (x2 - nxt->m_x));
+            if(tmpPrint2) qDebug() << "cur--nxt is horizontal,nxt--far is normal";
+            float k = -1 / ( (y2 - nxt->m_y) / (x2 - nxt->m_x) );
             //y - y2 = k(x - x2);
             float y = k * (x1 - x2) + y2;
             center.m_x = x1;
@@ -31,11 +35,13 @@ static void getCenter(Point & center,float x1,float y1,float x2,float y2,Point *
     }
     else if(fabs(nxt->m_x - x1) < 1){ // cur--nxt is vertical
         if(fabs(y2 - nxt->m_y) < 1){// nxt--far is horizontal
+            if(tmpPrint2) qDebug() << "cur--nxt is vertical,nxt--far is horizontal";
             center.m_x = x2;
             center.m_y = y1;
             return;
         }
         else{//normal
+            if(tmpPrint2) qDebug() << "cur--nxt is vertical,nxt--far is normal";
             float k = -1 / ((y2 - nxt->m_y) / (x2 - nxt->m_x));
             float x = (y1 - y2) / k + x2;
             center.m_x = x;
@@ -46,18 +52,21 @@ static void getCenter(Point & center,float x1,float y1,float x2,float y2,Point *
     else{
         if(fabs(nxt->m_x - x2) < 1) // nxt--far is vertical
         {
+            if(tmpPrint2) qDebug() << "cur--nxt is normal,nxt--far is vertical";
             float k = -1 / ((y1 - nxt->m_y) / (x1 - nxt->m_x));
             float x = (y2 - y1) / k + x1;
             center.m_x = x;
             center.m_y = y2;
         }
         else if(fabs(nxt->m_y - y2) < 1){ // nxt--far is horizontal
+            if(tmpPrint2) qDebug() << "cur--nxt is normal,nxt--far is horizontal";
             float k = -1 / ((y1 - nxt->m_y) / (x1 - nxt->m_x));
             float y = k*(x2 - x1) + y1;
             center.m_x = x2;
             center.m_y = y;
         }
         else{ //most scenario
+            if(tmpPrint2) qDebug() << "cur--nxt is normal,nxt--far is normal";
             float k1 = -1 / ((y1 - nxt->m_y) / (x1 - nxt->m_x));
             float k2 = -1 / ((y2 - nxt->m_y) / (x2 - nxt->m_x));
             float x = (k1 * x1 - k2 * x2 + y2 - y1) / (k1 - k2);
@@ -67,7 +76,7 @@ static void getCenter(Point & center,float x1,float y1,float x2,float y2,Point *
         }
     }
 }
-static float getAngle(Point & center,float arcX,float arcY){
+float Gen3DMapPoints::getAngle(Point & center,float arcX,float arcY){
     float ang;
     static const float pi = 3.1415926;
     float cx = center.m_x;
@@ -105,7 +114,7 @@ static float getAngle(Point & center,float arcX,float arcY){
     }
     return ang;
 }
-static void extend(Point* cur,Point* nxt,Point* far,QPainterPath & pp){
+void Gen3DMapPoints::extend(Point* cur,Point* nxt,Point* far,QPainterPath & pp){
     //这个函数做两件事,lineTo 和 arcTo
     float len1 = sqrt((cur->m_x - nxt->m_x) * (cur->m_x - nxt->m_x) +
                       (cur->m_y - nxt->m_y) * (cur->m_y - nxt->m_y));
@@ -123,6 +132,7 @@ static void extend(Point* cur,Point* nxt,Point* far,QPainterPath & pp){
 
     float arcStartX = cur->m_x + (1 - ratio1) * (nxt->m_x - cur->m_x);
     float arcStartY = cur->m_y + (1 - ratio1) * (nxt->m_y - cur->m_y);
+
     pp.lineTo(QPointF(arcStartX,arcStartY));
     if(arcStartX < 0 || arcStartX > 100*10000 || arcStartY < 0 || arcStartY > 100*10000){
         printf("arcStartX = %f,arcStarty = %f\n",arcStartX,arcStartY);
@@ -133,12 +143,21 @@ static void extend(Point* cur,Point* nxt,Point* far,QPainterPath & pp){
 
     Point center;
     getCenter(center,arcStartX,arcStartY,arcEndX,arcEndY,nxt);
-    qDebug() << "center:" << center.str();
+    //qDebug() << "center:" << center.str();
 
     float r = sqrt( (center.m_x - arcStartX) * (center.m_x - arcStartX) +
                     (center.m_y - arcStartY) * (center.m_y - arcStartY));
 
-    //qDebug() <<  "r = " << r;
+    if(tmpPrint){
+        if(r > 100000){
+            qDebug() << "center:" << center.str() ;
+            qDebug() << "r = " << r << ",nxt:" << nxt->str() << "cur:" << cur->str() << endl;
+            tmpPrint2 = true;
+            getCenter(center,arcStartX,arcStartY,arcEndX,arcEndY,nxt);
+            tmpPrint2 = false;
+        }
+
+    }
 
     QRect rct(0,0,r*2,r*2);
     rct.moveCenter(QPoint(center.m_x,center.m_y));
@@ -154,10 +173,10 @@ static void extend(Point* cur,Point* nxt,Point* far,QPainterPath & pp){
     while(spanAngle < -180){
         spanAngle += 360;
     }
-    qDebug() << "startAngle:" << startAngle << ",spanAngle = " << spanAngle;
+    //qDebug() << "startAngle:" << startAngle << ",spanAngle = " << spanAngle;
     pp.arcTo(rct,startAngle,spanAngle);
 }
-static void getFilletPath(const QList<Point*> & path,QPainterPath & pp){
+void Gen3DMapPoints::getFilletPath(const QList<Point*> & path,QPainterPath & pp){
     if(path.length() <=2 ) return;
     bool headTailLap = false;
     if(path[0] == path[path.length() - 1]) headTailLap = true;
@@ -259,16 +278,16 @@ static void delDoubleBasierControlList(QList<QList<Controls > > & controlList ){
     controlList.clear();
 }
 /* 根据三个点形成的三角形,获取cur这个点的余弦值 */
-static double getCos(Point* cur,Point* prv,Point* nxt){
-    if(!cur || !prv || !nxt) return 0;
+double Gen3DMapPoints::getCos(Point* mid,Point* prv,Point* nxt){
+    if(!mid || !prv || !nxt) return 0;
     double a = sqrt((prv->m_x - nxt->m_x)*(prv->m_x - nxt->m_x) + (prv->m_y - nxt->m_y)*(prv->m_y - nxt->m_y));
-    double b = sqrt((prv->m_x - cur->m_x)*(prv->m_x - cur->m_x) + (prv->m_y - cur->m_y)*(prv->m_y - cur->m_y));
-    double c = sqrt((cur->m_x - nxt->m_x)*(cur->m_x - nxt->m_x) + (cur->m_y - nxt->m_y)*(cur->m_y - nxt->m_y));
+    double b = sqrt((prv->m_x - mid->m_x)*(prv->m_x - mid->m_x) + (prv->m_y - mid->m_y)*(prv->m_y - mid->m_y));
+    double c = sqrt((mid->m_x - nxt->m_x)*(mid->m_x - nxt->m_x) + (mid->m_y - nxt->m_y)*(mid->m_y - nxt->m_y));
     //qDebug() << "a = " << a << ",b = " << b << ",c = " << c;
     return (b*b + c*c - a*a) / (2 * b * c);
 }
 /* 切出一个钝角 */
-static void cutObtuse(Point* cur,Point* prv,Point* nxt){
+void Gen3DMapPoints::cutObtuse(Point* cur,Point* prv,Point* nxt){
     float ratio = 0.2;
     float x1 = prv->m_x - (prv->m_x - cur->m_x) * ratio;
     float y1 = prv->m_y - (prv->m_y - cur->m_y) * ratio;
@@ -289,190 +308,7 @@ Gen3DMapPoints::~Gen3DMapPoints()
     delPointList(m_contourPointList);
 }
 
-void Gen3DMapPoints::fillet(QList<Point*> & path){
-    int len = path.length();
-    if(len < 4) return;
-    Point* prv = NULL;
-    Point* nxt = NULL;
-    Point* cur = NULL;
-    bool headTailLap = true;
-    if(path[len-1] != path[0]) headTailLap = false;
-    int loopTime = len-1;
-    if(!headTailLap) loopTime = len;
-    for(int i = 0;i<loopTime;++i){
-        cur = path[i];
-        if(i == 0){
-            nxt = path[1];
-            if(headTailLap) prv = path[len-2];
-            else prv = path[len-1];
-        }
-        else if(i == len-1){
-            prv = path[i-1];
-            if(headTailLap) nxt = path[1];
-            else nxt = path[0];
-        }
-        else{
-            prv = path[i-1];
-            nxt = path[i+1];
-        }
-        double cosCur = getCos(cur,prv,nxt);
-        if(cosCur >= 0.7071){ //cos45
-            cutObtuse(cur,prv,nxt);
-        }
-    }
-}
 
-void Gen3DMapPoints::getDoubleBazierControls(QList<QList<Point*> > & pathList,
-                       QList<QList<Controls > > & controlList){
-    float factor = 0.1;
-    for(int i = 0;i<pathList.size();++i){
-        QList<Point*> & path = pathList[i];
-        if(path.length() < 5) { //include the repeated head and tail node
-            qDebug() << "path length < 5 ";
-            continue;
-        }
-        QList<Controls > controls;
-        bool headTailLap = path[0] == path[path.length() - 1];
-        for(int j = 0;j< path.length();++j){
-            Point * po = path[j];
-            Point * c1 = NULL;
-            Point * c2 = NULL;
-            Point * po_prev = NULL;
-            Point * po_next = NULL;
-            Point * po_next_next = NULL;
-            if(j == 0){
-                po_next = path[1];
-                po_next_next = path[2];
-                if(headTailLap){
-                    po_prev = path[path.length() - 2];
-                }
-                else{
-                    po_prev = path[path.length() - 1];
-                }
-            }
-            else if(j == path.length() - 2){
-                po_prev = path[j-1];
-                po_next = path[j+1];
-                if(headTailLap){
-                    po_next_next = path[1];
-                }
-                else{
-                    po_next_next = path[0];
-                }
-            }
-            else if(j == path.length() - 1){
-                po_prev = path[j-1];
-                if(headTailLap){
-                    po_next = path[1];
-                    po_next_next = path[2];
-                }
-                else{
-                    po_next = path[0];
-                    po_next_next = path[1];
-                }
-            }
-            else{
-                po_prev = path[j-1];
-                po_next = path[j+1];
-                po_next_next = path[j+2];
-            }
-            c1 = new Point(po->m_x + (po_next->m_x - po_prev->m_x) * factor ,
-                           po->m_y + (po_next->m_y - po_prev->m_y) * factor);
-            c2 = new Point(po_next->m_x - (po_next_next->m_x - po->m_x) * factor,
-                           po_next->m_y - (po_next_next->m_y - po->m_y) * factor);
-            Controls con;
-            con.m_c1 = c1;
-            con.m_c2 = c2;
-            controls.push_back(con);
-        }
-        controlList.push_back(controls);
-    }
-}
-Point * Gen3DMapPoints::getPerpendicularOffsetPoint(Point * cur,Point* nxt, Point* far){
-    if(!cur || !nxt || !far) return NULL;
-    float len = sqrt((cur->m_x - nxt->m_x) * (cur->m_x - nxt->m_x) +
-                     (cur->m_y - nxt->m_y) * (cur->m_y - nxt->m_y));
-    float offset = len / 6;
-    Point mid((cur->m_x + nxt->m_x)/2,(cur->m_y + nxt->m_y)/2);
-    Point bak1,bak2;
-    if(fabs(cur->m_x - nxt->m_x) < 1){
-        bak1.m_x = cur->m_x - offset;
-        bak1.m_y = mid.m_y;
-        bak2.m_x = cur->m_x + offset;
-        bak2.m_y = mid.m_y;
-    }
-    else if(fabs(cur->m_y - nxt->m_y) < 1){
-        bak1.m_y = cur->m_y + offset;
-        bak2.m_y = cur->m_y - offset;
-        bak1.m_x = mid.m_x;
-        bak2.m_x = mid.m_x;
-    }
-    else if(cur->m_x > nxt->m_x && cur->m_y > nxt->m_y ||
-            cur->m_x < nxt->m_x && cur->m_y < nxt->m_y){
-        //斜率大于0
-        float leny = fabs(cur->m_y - nxt->m_y);
-        float lenx = fabs(cur->m_x - nxt->m_x);
-        float hypotenuse = sqrt(leny*leny + lenx*lenx);
-        float ratio = offset / hypotenuse;
-        leny *= ratio;
-        lenx *= ratio;
-        bak1.m_x = mid.m_x - leny;
-        bak1.m_y = mid.m_y + lenx;
-        bak2.m_x = mid.m_x + leny;
-        bak2.m_y = mid.m_y - lenx;
-    }
-    else{
-        //斜率小于0
-        float leny = fabs(cur->m_y - nxt->m_y);
-        float lenx = fabs(cur->m_x - nxt->m_x);
-        float hypotenuse = sqrt(leny*leny + lenx*lenx);
-        float ratio = offset / hypotenuse;
-        leny *= ratio;
-        lenx *= ratio;
-        bak1.m_x = mid.m_x - leny;
-        bak1.m_y = mid.m_y - lenx;
-        bak2.m_x = mid.m_x + leny;
-        bak2.m_y = mid.m_y + lenx;
-    }
-    float len1 = sqrt( (bak1.m_x - far->m_x) * (bak1.m_x - far->m_x) +
-                       (bak1.m_y - far->m_y) * (bak1.m_y - far->m_y) );
-    float len2 = sqrt( (bak2.m_x - far->m_x) * (bak2.m_x - far->m_x) +
-                       (bak2.m_y - far->m_y) * (bak2.m_y - far->m_y) );
-    if(len1 > len2){
-        Point * ret = new Point(bak1.m_x,bak1.m_y);
-        return ret;
-    }
-    else{
-        Point * ret = new Point(bak2.m_x,bak2.m_y);
-        return ret;
-    }
-}
-void Gen3DMapPoints::getSingleBazierControls(QList<QList<Point*> > & pathList,
-                                             QList<QList<Point*> > & controlList){
-    //路径的最后一个和第一个是一样的
-    Point * cur = NULL;//----point1----point2----point3---- ==> cur=point1,nxt=point2,far=point3
-    Point * nxt = NULL;
-    Point * far = NULL;
-    for(int i = 0;i<pathList.size();++i){
-        QList<Point*> & path = pathList[i];
-        QList<Point*> conList;
-        for(int j = 0;j<path.size() - 1;++j){
-            cur = path[j];
-            if(j == path.size() - 2){
-                nxt = path[0];// == path[0]
-                far = path[1];
-            }
-            else{
-                nxt = path[j+1];
-                far = path[j+2];
-            }
-            Point* con = getPerpendicularOffsetPoint(cur,nxt,far);
-            if(con) conList.push_back(con);
-
-        }
-        controlList.push_back(conList);
-    }
-}
 
 void Gen3DMapPoints::saveContourPath(QList< QList<Point*> > & pathList){
     QString data;
@@ -622,7 +458,7 @@ void Gen3DMapPoints::getContourPathList(QList<QList<Point*> > & pathList){
     shrink(pathList,shrinkScale);
 }
 void Gen3DMapPoints::analyse(){
-#if 0
+#if 01
     getContourPoints(m_contourPointList,m_z);
     QList< QList<Point*> > pathList;
     getContourPaths(pathList);
@@ -630,10 +466,68 @@ void Gen3DMapPoints::analyse(){
     sort(pathList);
     int shrinkScale = (m_xPoint-1) * m_unit / 4000;
     shrink(pathList,shrinkScale);
-    output(pathList,shrinkScale);
+    m_fillColor = false;
+    //output(pathList,shrinkScale);
+    outputSingleLand(pathList,shrinkScale);
     delPointList(m_contourPointList);
 #endif
 }
+void Gen3DMapPoints::getKingdomRectList(QList<QRectF> & kingdomList,QList<Point*> & path,QPainterPath & pp,int num,
+                                        int iconWidth){
+    int unit = m_unit;
+    float minx = m_xPoint * unit;
+    float miny = m_yPoint * unit;
+    float maxx = 0;
+    float maxy = 0;
+    for(int i = 0;i<path.size();++i){
+        Point* p = path[i];
+        if(minx > p->m_x) minx = p->m_x;
+        if(miny > p->m_y) miny = p->m_y;
+        if(maxx < p->m_x) maxx = p->m_x;
+        if(maxy < p->m_y) maxy = p->m_y;
+    }
+    int w = maxx - minx;
+    int h = maxy - miny;
+    if(w < 1 || h < 1)return;
+    kingdomList.clear();
+    kingdomList.reserve(num);
+
+    QList<Point> meshList;//是以后诸侯国图标中心点的坐标
+    int idxx = w / iconWidth;//
+    int idxy = h / iconWidth;
+    float x,y;
+    for(int i = 0;i<idxx;++i){
+        for(int j = 0;j<idxy;++j){
+            if(i == idxx - 1){ //右边界上了
+                x = minx + 0.5* iconWidth + i*iconWidth - 0.2 * iconWidth;//减去5分之一宽度,避免图标太靠右
+            }
+            else if(i == 0){
+                x = minx + 0.5* iconWidth + i*iconWidth + 0.2 * iconWidth;
+            }
+            else{
+                x = minx + 0.5* iconWidth + i*iconWidth;
+            }
+            if(j == 0){
+                y = miny + 0.5 * iconWidth + i*iconWidth + 0.2 * iconWidth;
+            }
+            else if(j == idxy - 1){
+                y = miny + 0.5 * iconWidth + i*iconWidth - 0.2 * iconWidth;
+            }
+            else{
+                y = miny + 0.5 * iconWidth + i*iconWidth;
+            }
+            meshList.push_back(Point(x,y));
+        }
+    }
+    int len = meshList.size();
+    int meshIdx = 0;
+    std::set<int> idxSet;
+    while(idxSet.size() < num){
+        idxSet.insert(rand() % len);
+    }
+
+}
+
 void Gen3DMapPoints::getShearOffset(QList<Point*> & path,int & x,int & y,int ratio){
     x = 0;y = 0;
     int unit = m_unit;
@@ -652,8 +546,8 @@ void Gen3DMapPoints::getShearOffset(QList<Point*> & path,int & x,int & y,int rat
     y = ((m_yPoint - 1) * unit / ratio - (maxy - miny) ) / 2;
     x -= minx;
     y -= miny;
-    printf("maxx = %f,maxy = %f,minx = %f,miny = %f\n",maxx,maxy,minx,miny);
-    printf("offsetx = %d,offsety = %d\n",x,y);
+    //printf("maxx = %f,maxy = %f,minx = %f,miny = %f\n",maxx,maxy,minx,miny);
+    //printf("offsetx = %d,offsety = %d\n",x,y);
 }
 void Gen3DMapPoints::outputSingleLand(QList<QList<Point*> > & pathList,int shrinkScale){
     QImage image(QSize((m_xPoint - 1) * m_unit / shrinkScale,(m_yPoint - 1) * m_unit / shrinkScale),
@@ -672,10 +566,13 @@ void Gen3DMapPoints::outputSingleLand(QList<QList<Point*> > & pathList,int shrin
     //QList<QList<Point*> > hillList;
     QList<QPainterPath> ppLakeList;
     QList<QPainterPath> ppHillList;
-    int offsetx,offsety;
-    getShearOffset(pathList[0],offsetx,offsety,shrinkScale);
-    painter_png.translate(offsetx,offsety);//如果图形偏左，说明x小了，要把它向右移动，坐标系就要向左移动，offsetx>0
-    painter_svg.translate(offsetx,offsety);
+    if(0){
+        int offsetx,offsety;
+        getShearOffset(pathList[0],offsetx,offsety,shrinkScale);
+        painter_png.translate(offsetx,offsety);//如果图形偏左，说明x小了，要把它向右移动，坐标系就要向左移动，offsetx>0
+        painter_svg.translate(offsetx,offsety);
+    }
+
     if(m_fillColor){
         for(int i = 0;i<pathList.size();++i){
             QList<Point*> & path = pathList[i];
@@ -715,9 +612,20 @@ void Gen3DMapPoints::outputSingleLand(QList<QList<Point*> > & pathList,int shrin
                 continue;
             }
             QPainterPath pp;
-            getFilletPath(path,pp);
+            if(1){
+                if(path.size() > 100)
+                    tmpPrint = true;
+                else tmpPrint = false;
+                getFilletPath(path,pp);
+            }
+            else{
+                pp.moveTo(QPointF(path[0]->m_x,path[0]->m_y));
+                for(int i = 1;i<path.size();++i){
+                    pp.lineTo(QPointF(path[i]->m_x,path[i]->m_y));
+                }
+            }
             if(isHill(path,pp,m_unit * 1.0 / shrinkScale)){
-                if(ppHillList.size() >= 1) continue; //只保留七个大陆
+                if(ppHillList.size() >= 1) continue; //只保留1个大陆
                 ppHillList.push_back(pp);
             }
             else{ //所有的湖泊都是需要的
@@ -785,7 +693,7 @@ void Gen3DMapPoints::output(QList<QList<Point*> > & pathList,int shrinkScale){
 
             if(isHill(path,pp,m_unit * 1.0 / shrinkScale)){
                 if(ppHillList.size() >= 7) continue; //只保留七个大陆
-                if(path.length() <= 5) continue; //太小的岛屿不要了,但是湖泊是需要的
+                if(path.length() <= 5) continue; //太小的岛屿不要了
                 //hillList.push_back(path);
                 ppHillList.push_back(pp);
             }
@@ -855,6 +763,8 @@ void Gen3DMapPoints::output(QList<QList<Point*> > & pathList,int shrinkScale){
             }
             QPainterPath pp;
             getFilletPath(path,pp);
+
+
             if(isHill(path,pp,m_unit * 1.0 / shrinkScale)){
                 if(ppHillList.size() >= 7) continue; //只保留七个大陆
                 if(path.length() <= 5) continue; //太小的岛屿不要了,但是湖泊是需要的
@@ -891,14 +801,7 @@ void Gen3DMapPoints::output(QList<QList<Point*> > & pathList,int shrinkScale){
     painter_svg.end();
     image.save(g_path_mapResult + "map_" + QString::number(m_idxInFileName) + ".png");
 }
-QPointF Gen3DMapPoints::getLegendAnchor(QList<Point*> & path,QPainterPath & pp,int txtLen){
-    Point mid;
-    mid.m_x = 0;
-    mid.m_y = 0;
-    for(int i = 0;i<path.size();++i){
-//here!!!
-    }
-}
+
 
 bool Gen3DMapPoints::isLake(const QList<Point*> & path,const QPainterPath & pp,float gapUnit){
     return !isHill(path,pp,gapUnit);
@@ -1025,15 +928,7 @@ void Gen3DMapPoints::getPointsInSunShape(QList<Point*> & resList,const Point* ce
         }
     }
 }
-bool Gen3DMapPoints::hasScenario6(){
-    QList<Point*> nextList;
-    for(int i = 0;i<m_contourPointList.size();++i){
-        Point * p = m_contourPointList[i];
-        getPointsInSunShape(nextList,p,m_contourPointList);
-        if(nextList.size() >= 6) return true;
-    }
-    return false;
-}
+
 void Gen3DMapPoints::shrink(QList<QList<Point*> > & pathList , int scale){
     set<Point*> visit;
     for(int i = 0;i<pathList.size();++i){
@@ -1179,7 +1074,10 @@ void Gen3DMapPoints::findAllDiamonds(QList< QList<Point*> > & pathList,set<Point
             //qDebug() << "path.size = " << path.size();
             bool alreadySaved = false;
             for(int i = 0;i<path.size();++i){
-                if(visit.count(path[i]) > 0) alreadySaved = true;
+                if(visit.count(path[i]) > 0){
+                     alreadySaved = true;
+                     break;
+                }
             }
             if(!alreadySaved){
                 pathList << path;
@@ -1188,10 +1086,8 @@ void Gen3DMapPoints::findAllDiamonds(QList< QList<Point*> > & pathList,set<Point
                     visit.insert(path[i]);
                 }
             }
-
         }
     }
-
 }
 void Gen3DMapPoints::getContourPaths(QList< QList<Point*> > & pathList){
     set<Point*> visit;
@@ -1261,21 +1157,6 @@ void Gen3DMapPoints::getContourPaths(QList< QList<Point*> > & pathList){
             else{
                 printf("Error: nextList.size = %d\n",nextList.size());
                 for(int i = 0;i<path.size();++i) leftContourPointList.removeOne(path[i]);
-                if(0)
-                {
-                    QString data = "nextList.size = " + QString::number(nextList.size()) + "\npath:";
-                    for(int i = 0;i< path.size();++i){
-                        data += path[i]->str() + ";";
-                    }
-                    data += "\n";
-                    QFile f("D:/QT/qtCreator/Test4AppMap/errPath.txt");
-                    bool ok = f.open(QIODevice::Append);
-                    if(ok){
-                        f.write(data.toLocal8Bit());
-                        f.close();
-                    }
-                }
-
                 path.clear();
                 break;
             }

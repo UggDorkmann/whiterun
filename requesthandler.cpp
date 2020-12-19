@@ -139,8 +139,8 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
             response.write(ba,true);
         }
     }
-    else if(path == "/randNickname.html" || path == "/randMap.html" ||
-            path == "/randName.html" ){
+    else if(path == "/nickname.html" || path == "/map.html" ||
+            path == "/name.html" ){
         QString name = g_projectAPath + path;
         QFile f(name);
         bool ok = f.open(QIODevice::ReadOnly);
@@ -223,7 +223,7 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
         bool singleLand = path.contains("singleLand");
 
         QString resPath = gm->generateAMap(idx,fillColor,singleLand);
-        //gm->saveMeshData();
+        gm->saveMeshData();
         delete gm;
         QFile f(resPath);
         bool ok = f.open(QIODevice::ReadOnly);

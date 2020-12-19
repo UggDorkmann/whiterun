@@ -54,24 +54,18 @@ private:
     /* 单层等高点集合 */
     QList<Point*> m_contourPointList;
 
+    /* 获取一个大陆上的诸侯割据点的链表,保存在kingdomList中 */
+    void getKingdomRectList(QList<QRectF> & kingdomList,QList<Point*> & path,QPainterPath & pp,
+                            int num = 5,int iconWidth = 60);
+
+    /* 输出单块大陆图 */
     void outputSingleLand(QList<QList<Point*> > & pathList,int shrinkScale);
+
+    /* 获取把单块大陆居中所需的坐标系的偏移值 */
     void getShearOffset(QList<Point*> & path,int & x,int & y,int scale);
+
+    /* 输出多陆图 */
     void output(QList<QList<Point*> > & pathList,int shrinkScale);
-
-    /* 获取图例定位点 */
-    QPointF getLegendAnchor(QList<Point*> & path,QPainterPath & pp,int txtLen);
-
-    /* 给路径中的锐角倒角 */
-    void fillet(QList<Point*> & path);
-
-    /* 获取单个贝塞尔控制点 */
-    void getSingleBazierControls(QList<QList<Point*> > & pathList,QList<QList<Point*> > & controlList);
-
-    /* 获取两个贝塞尔控制点 */
-    void getDoubleBazierControls(QList<QList<Point*> > & pathList,QList<QList<Controls > > & controlList);
-
-    /* 根据一个截点和它下一个截点,获取这两个点中垂线上距离两个点中点一定距离的两个点,然后取这两个点中距离far远一些的那个店 */
-    Point * getPerpendicularOffsetPoint(Point * cur,Point* nxt, Point* far);
 
     /* 路径中间是湖泊 */
     bool isLake(const QList<Point*> & path,const QPainterPath & pp,float gapUnit);
@@ -93,9 +87,6 @@ private:
 
     /* judge if the point is part of some diamond,if so ,the four points of the diamond will be saved in path */
     bool consistDiamond(Point* p,QList<Point*> & path);
-
-    /* 判断m_contourPointList中是否有六个截点在同一个日字区域的场景 */
-    bool hasScenario6();
 
     /* 根据网格单位长度,判断一个点是不是在竖向的边框上 */
     bool onVerticalBeam(const Point* center,float unitGap);
@@ -139,6 +130,8 @@ private:
 
     /*获得推荐的等高线标高*/
     void getz();
+
+    void getFilletPath(const QList<Point*> & path,QPainterPath & pp);
 public:
     /******************************** TEST FUNCTION ********************************/
     void saveContourPath(QList<QList<Point*> > & pathList);
@@ -146,6 +139,14 @@ public:
     void readMeshData();
     void analyse();
     void getContourPathList(QList<QList<Point*> > & pathList);
+
+private:
+    /******************************** Math Function ********************************/
+    double getCos(Point* mid,Point* prv,Point* nxt);
+    void cutObtuse(Point* cur,Point* prv,Point* nxt);
+    void extend(Point* cur,Point* nxt,Point* far,QPainterPath & pp);
+    void getCenter(Point & center,float x1,float y1,float x2,float y2,const Point * nxt);
+    float getAngle(Point & center,float arcX,float arcY);
 };
 
 #endif // GEN3DMAPPOINTS_H
