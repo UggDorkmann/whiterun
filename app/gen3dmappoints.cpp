@@ -822,19 +822,21 @@ void Gen3DMapPoints::createRegion(){
            m_xPoint*m_yPoint,1.0*m_contourPointList.size()/(m_xPoint*m_yPoint));
     QList<QList<Point*> > pathList;
     getContourPathsForRegion(pathList);
-    printf("after getContourPaths\n");
+    printf("after getContourPaths,pathList.size = %d\n",pathList.size());
     sort(pathList);
     int shrinkScale = (m_xPoint-1) * m_unit / 2000;//保证最终的图形的宽度是2000像素
     shrink(pathList,shrinkScale);
+    printf("after shrink\n");
     QImage png;
     QPainter svgPainter;
     QSvgGenerator svgg;
     QList<PathPainterPath> pppHillList;
     QList<PathPainterPath> pppLakeList;
     drawLands(pathList,shrinkScale,png,svgPainter,svgg,pppHillList,pppLakeList,7);
+    printf("after drawLands\n");
     output(png,svgPainter);
+    printf("after output\n");
 
-    //delPointList(m_obstacleList);
     delPointList(m_contourPointList);
 }
 void Gen3DMapPoints::createWorld(){
@@ -1395,6 +1397,7 @@ QString Gen3DMapPoints::generateNewRegion(long long idx){
     createTiltArr();
     createRegion();
     QString str = g_path_mapResult + "map_" + QString::number(idx) + ".svg";
+    printf("svg file path:%s\n",str.toStdString().c_str());
     return str;
 }
 Gen3DMapPoints::Gen3DMapPoints(bool){
@@ -1724,6 +1727,7 @@ Point* Gen3DMapPoints::nextFrameNode(Point* cut){
 }
 
 Point* Gen3DMapPoints::nextFrameNode(Point* cur,QList<Point*> & rawFrame,std::set<Point*> visit){
+    while(rawFrame.size() > 0 && rawFrame[0] != cur) rawFrame.removeFirst();
     rawFrame.removeOne(cur);
     if(rawFrame.size() <= 0) return NULL;
     Point* nxt = rawFrame[0];
@@ -1731,7 +1735,7 @@ Point* Gen3DMapPoints::nextFrameNode(Point* cur,QList<Point*> & rawFrame,std::se
         return nxt;
     }
     else{
-        Point * cut = getContourPoint(cur,nxt);\
+        Point * cut = getContourPoint(cur,nxt);
         if(!cut){
             printf("Error! cut point is NULL\n");
         }
@@ -1749,8 +1753,10 @@ QList<Point*> Gen3DMapPoints::nextFramePath(Point* cur,const QList<Point*>& srcL
     while(1){
         getPointsInSunShape(nextList,cur,srcList);
         if(nextList.size() == 1){
+            printf("nextList.size = 1,nxt:%s\n",nextList[0]->str().toStdString().c_str());
             path.push_back(nextList[0]);
             visit.insert(nextList[0]);
+            cur = nextList[0];
             if(path.size() > 2) break;
         }
         else if(nextList.size() == 2){
@@ -1760,6 +1766,7 @@ QList<Point*> Gen3DMapPoints::nextFramePath(Point* cur,const QList<Point*>& srcL
                 break;
             }
             if(next){
+                printf("nextList.siz = 2 , nxt: %s\n",next->str().toStdString().c_str());
                 path.push_back(next);
                 cur = next;
                 visit.insert(next);
@@ -1790,6 +1797,7 @@ QList<Point*> Gen3DMapPoints::nextFramePath(Point* cur,const QList<Point*>& srcL
                 }
             }
             if(path.count(cur) <= 0) {
+                printf("nxtList.size =  , nxt = %s\n",cur->str().toStdString().c_str());
                 path << cur;
                 visit.insert(cur);
             }
@@ -1802,6 +1810,7 @@ QList<Point*> Gen3DMapPoints::nextFramePath(Point* cur,const QList<Point*>& srcL
             prv_for6Scenario = cur;
             next = findNextPointForCenterWith4Points(nextList,visit,cur);
             if(next){
+                printf("nxtList.siz = 4,nxt = %s\n",next->str().toStdString().c_str());
                 path.push_back(next);
                 cur = next;
                 visit.insert(next);
@@ -1848,15 +1857,10 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
         pathList << frame;
     }
     else{
-        set<Point*> visit;
-        //第一步:先把所有钻石形的小洞找出来,每个小洞都是一个path
-        findAllDiamonds(pathList,visit);
-        printf("after finding all diamonds\n");
+
         QList<Point*> leftContourPointList = m_contourPointList;
-        for(set<Point*>::iterator it = visit.begin();it!= visit.end();++it){
-            leftContourPointList.removeOne(*it);
-        }
-        //第二步:把边框连起来
+
+        //第1步:把边框连起来
         QList<Point*> frame;
         QList<Point*> rawFrame;
         for(int i = 0;i<m_xPoint;++i)rawFrame << m_pArr[i][0];
@@ -1871,10 +1875,15 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
             }
         }
         printf("rawFrame.size = %d\n",rawFrame.size());
-        QList<Point*> lowPart = rawFrame.mid(0,startIdx);
-        for(int i = 0;i<startIdx;++i) rawFrame.removeAt(0);
-        rawFrame += lowPart; //make sure first node is land
-        printf("after concat,rawFrame.size = %d\n",rawFrame.size());
+        if(startIdx > 0){
+            QList<Point*> lowPart = rawFrame.mid(0,startIdx);
+            for(int i = 0;i<startIdx;++i) rawFrame.removeAt(0);
+            rawFrame += lowPart; //make sure first node is land
+            printf("after concat,rawFrame.size = %d\n",rawFrame.size());
+        }
+        printf("@@@@@@@@@@@@@@@@@@@\n");
+        print(rawFrame);
+        printf("@@@@@@@@@@@@@@@@@@@\n");
         Point* cur = rawFrame[0];
         std::set<Point*> frameVisit;
         while(cur){
@@ -1890,12 +1899,10 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
 
                 frame += framePath;
                 cur = nextFrameNode(framePath[framePath.size() - 1]);
-                print(framePath);
+                //print(framePath);
                 printf("cur : %s\n",cur ? cur->str().toStdString().c_str() : "NULL");
             }
             else{
-                printf("cur:%s\n",cur->str().toStdString().c_str());
-                //frame << cur;
             }
             printf("frame.size = %d\n",frame.size());
         }
@@ -1903,6 +1910,15 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
             leftContourPointList.removeOne(frame[i]);
         }
         printf("after while, frame.size = %d\n",frame.size());
+        pathList << frame;
+        //第2步:先把所有钻石形的小洞找出来,每个小洞都是一个path
+        //set<Point*> visit;
+        //findAllDiamonds(pathList,visit);
+        //printf("after finding all diamonds\n");
+        //for(set<Point*>::iterator it = visit.begin();it!= visit.end();++it){
+        //    leftContourPointList.removeOne(*it);
+        //}
+
         //第三步,把湖泊找出来
     }
 }

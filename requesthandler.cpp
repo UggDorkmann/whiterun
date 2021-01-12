@@ -287,9 +287,9 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
         gm->m_showTemperature = showTemperature;
 
         QString resPath = gm->generateNewRegion(idx);
-#ifdef WIN32
-        gm->saveMeshData();
-#endif
+//#ifdef WIN32
+//        gm->saveMeshData();
+//#endif
         delete gm;
         QFile f(resPath);
         bool ok = f.open(QIODevice::ReadOnly);
@@ -308,7 +308,13 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
             response.write(ba,true);
             printf("task finished\n");
         }
+        else{
+            printf("file open fail\n");
+        }
+#ifndef WIN32
         delFilesSecondsAgo(5);
+#endif
+
     }
     else if( path.startsWith("/getPngByID_") ){
         QString str_id = path.split("/getPngByID_").at(1);
