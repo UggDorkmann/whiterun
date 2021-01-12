@@ -219,11 +219,23 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
         // /getContinent_fill_singleLand (fill/noFill,singleLand/multiLand)
         Gen3DMapPoints * gm = new Gen3DMapPoints;
         long long idx = ++g_mapGenTimes;
-        bool fillColor = path.contains("_fill");
+        bool fillColor = path.contains("fill");
         bool singleLand = path.contains("singleLand");
+        bool showKingdom = path.contains("showKingdom");
+        bool showRiver = path.contains("showRiver");
+        bool showTemperature = path.contains("showTemperature");
+        bool showMountain = path.contains("showMountain");
+        gm->m_fillColor = fillColor;
+        gm->m_singleLand = singleLand;
+        gm->m_showRiver = showRiver;
+        gm->m_showKingdom = showKingdom;
+        gm->m_showMountain = showMountain;
+        gm->m_showTemperature = showTemperature;
 
-        QString resPath = gm->generateAMap(idx,fillColor,singleLand);
+        QString resPath = gm->generateNewWorld(idx);
+#ifdef WIN32
         gm->saveMeshData();
+#endif
         delete gm;
         QFile f(resPath);
         bool ok = f.open(QIODevice::ReadOnly);
@@ -241,6 +253,55 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
             //static QRegExp rx("<svg width=.*height=.* ");
             //rx.setMinimal(true);
             //data.replace(rx,"<svg viewbox=\"0 0 4000 2000\" ");
+
+            ba = data.toUtf8();
+            response.setHeader("Content-Type", "text/plain; charset=utf-8");
+            response.write(ba,true);
+            printf("task finished\n");
+        }
+        delFilesSecondsAgo(5);
+    }
+    else if(path.startsWith("/getRegion")){
+        Gen3DMapPoints * gm = new Gen3DMapPoints(65,65);
+        long long idx = ++g_mapGenTimes;
+        bool fillColor = path.contains("fill");
+        bool showKingdom = path.contains("showKingdom");
+        bool showRiver = path.contains("showRiver");
+        bool showTemperature = path.contains("showTemperature");
+        bool showMountain = path.contains("showMountain");
+        Gen3DMapPoints::CoastDirection coast;
+        if(path.contains("coast:north-east")) coast = Gen3DMapPoints::CoastNorthEast;
+        else if(path.contains("coast:south-east")) coast = Gen3DMapPoints::CoastSouthEast;
+        else if(path.contains("coast:north-west")) coast = Gen3DMapPoints::CoastNorthWest;
+        else if(path.contains("coast:south-west")) coast = Gen3DMapPoints::CoastSouthWest;
+        else if(path.contains("coast:north")) coast = Gen3DMapPoints::CoastNorth;
+        else if(path.contains("coast:south")) coast = Gen3DMapPoints::CoastSouth;
+        else if(path.contains("coast:west")) coast = Gen3DMapPoints::CoastWest;
+        else if(path.contains("coast:east")) coast = Gen3DMapPoints::CoastEast;
+        else coast = Gen3DMapPoints::CoastNone;
+        gm->m_coastDir = coast;
+        gm->m_fillColor = fillColor;
+        gm->m_showRiver = showRiver;
+        gm->m_showKingdom = showKingdom;
+        gm->m_showMountain = showMountain;
+        gm->m_showTemperature = showTemperature;
+
+        QString resPath = gm->generateNewRegion(idx);
+#ifdef WIN32
+        gm->saveMeshData();
+#endif
+        delete gm;
+        QFile f(resPath);
+        bool ok = f.open(QIODevice::ReadOnly);
+        if(ok){
+            QByteArray ba = f.readAll();
+            f.close();
+            QString data = QString::fromUtf8(ba);
+
+            QString str_id = "<id=" + getIDFromSvgPath(resPath) + ">";
+            QString str_viewBox = "<viewbox=2000*2000>";
+
+            data.replace("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>",str_id + str_viewBox);
 
             ba = data.toUtf8();
             response.setHeader("Content-Type", "text/plain; charset=utf-8");
