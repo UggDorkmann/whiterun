@@ -63,6 +63,9 @@ public:
     /* 生成新的局部地图 , 返回svg文件路径 */
     QString generateNewRegion(long long idxInFileName);
 
+    /* 网格坐标集 */
+    QList<QList<Point*> > m_pArr;//一列  一列  一列 ...
+    int m_shrinkScale = 1;
 private:
     /* 用于判断山脉显示的qualified height */
     int m_mountainHeight;
@@ -74,8 +77,7 @@ private:
     /* 保存的图片文件中的序列号 */
     long long m_idxInFileName;
 
-    /* 网格坐标集 */
-    QList<QList<Point*> > m_pArr;//一列  一列  一列 ...
+
 
     /* 鼓锤的方向,1:向上敲出隆块,-1:向下敲出凹坑 */
     int m_un;
@@ -85,6 +87,8 @@ private:
 
     /* 单层等高点集合 */
     QList<Point*> m_contourPointList;
+
+    void init();
 
     /* 生成世界地图 */
     void createWorld();
@@ -142,7 +146,10 @@ private:
 
     QList<Point*> nextFramePath(Point* cur,const QList<Point*>& srcList);
 
+    void getFrame(QList<Point*> & frame);
+
     void print(const QList<Point*> & path);
+    void log(const QList<Point*> & path,QString fn = "log",bool hasZ = true);
 
     /* 从m_contourPointList中找到所有的只含有四个截点的小闭合区域(钻石区域),保存在pathList中 */
     void findAllDiamonds(QList< QList<Point*> > & pathList,set<Point*> & visit);

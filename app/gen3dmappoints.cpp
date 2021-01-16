@@ -623,30 +623,6 @@ void Gen3DMapPoints::drawPath(QList<QList<Point*> > & pathList,QImage & png,QPai
 }
 void Gen3DMapPoints::test(){
     {
-        QSvgGenerator svgg;
-
-        svgg.setFileName(g_path_mapResult + "map_" + QString::number(1000) + ".svg");
-        svgg.setSize(QSize(2000,2000));
-        QPainter svgPainter;
-        svgPainter.begin(&svgg);
-        QPainterPath clipPath;
-        clipPath.moveTo(100,100);
-        clipPath.lineTo(1000,100);
-        clipPath.lineTo(1000,1000);
-        clipPath.lineTo(100,1000);
-        clipPath.lineTo(100,100);
-        svgPainter.setClipping(true);
-
-        qDebug() << "svgPainter.isclippling" << svgPainter.hasClipping();
-        QPainterPath pp;
-        pp.moveTo(500,500);
-        pp.lineTo(1500,500);
-        pp.lineTo(1000,1000);
-        pp.lineTo(500,500);
-        svgPainter.setClipPath(clipPath);
-        svgPainter.drawPath(pp);
-
-        svgPainter.end();
         return;
     }
     createArr();
@@ -818,6 +794,7 @@ void Gen3DMapPoints::createRegion(){
     drum(times,0.05,0.2);
     getz();
     getContourPoints(m_contourPointList,m_z);
+    log(m_contourPointList,"contourPoints");
     printf("m_contourPointList.size =%d,total size =%d,percent=%f\n",m_contourPointList.size(),
            m_xPoint*m_yPoint,1.0*m_contourPointList.size()/(m_xPoint*m_yPoint));
     QList<QList<Point*> > pathList;
@@ -962,7 +939,7 @@ void Gen3DMapPoints::saveMeshData(){
     if(ok){
         QString data = "z:" + QString::number(m_z) + "\n";
         data += "col:" + QString::number(m_xPoint) + ";row:" +
-                QString::number(m_yPoint) + "\n";
+                QString::number(m_yPoint) + ";shrink:" + QString::number(m_shrinkScale) + "\n";
         for(int i = 0;i<m_pArr.size();++i){
             QList<Point*> & col = m_pArr[i];
             for(int j = 0;j<col.size();++j){
@@ -993,17 +970,21 @@ void Gen3DMapPoints::readMeshData(){
         }
         else if(str.contains("col:")){
             QStringList tmpList = str.split(";");
-            if(tmpList.size() < 2) {
+            if(tmpList.size() < 3) {
                 printf("no row info,quit\n");
                 return;
             }
             QString strCol = tmpList[0];
             QString strRow = tmpList[1];
+            QString strShrink = tmpList[0];
             if(strCol.contains("col:")){
                 xPoint = strCol.split("col:")[1].toInt();
             }
             if(strRow.contains("row:")){
                 yPoint = strRow.split("row:")[1].toInt();
+            }
+            if(strShrink.contains("shrink:")){
+                m_shrinkScale = strShrink.split("shrink:")[1].toInt();
             }
 
         }
@@ -1032,12 +1013,9 @@ void Gen3DMapPoints::readMeshData(){
         if(str.length() < 5){
             continue;
         }
-        idxx = i / 51;
-        idxy = i % 51;
-        if(idxx < 0 || idxx > m_xPoint-1 || idxy < 0 || idxy > m_yPoint - 1){
-            printf("bad data,index out of reach,index:%d,idxx=%d,idxy=%d\n",i,idxx,idxy);
-            continue;
-        }
+        idxx = i / xPoint;
+        idxy = i % xPoint;
+
         xyz = str.split(",");
         if(xyz.size() != 3)continue;
         m_pArr[idxx][idxy]->m_x = xyz[0].toFloat();
@@ -1400,15 +1378,23 @@ QString Gen3DMapPoints::generateNewRegion(long long idx){
     printf("svg file path:%s\n",str.toStdString().c_str());
     return str;
 }
-Gen3DMapPoints::Gen3DMapPoints(bool){
-    m_un = 1;
-    m_fillColor = true;
-    m_showKingdom = false;
+void Gen3DMapPoints::init(){
     m_unit = 10000;
+    m_showKingdom = false;
+    m_showMountain = false;
+    m_showRiver = false;
+    m_showTemperature = false;
+    m_fillColor = false;
+}
+Gen3DMapPoints::Gen3DMapPoints(bool){
+    //only for test
+    init();
+    m_un = 1;
     m_xPoint = 101;
     m_yPoint = 51;
 }
 Gen3DMapPoints::Gen3DMapPoints(int xPoints,int yPoints){
+    init();
     m_un = -1;
     if(xPoints <= 1 || yPoints <= 1) {
         m_xPoint = 100 + 1;
@@ -1418,27 +1404,16 @@ Gen3DMapPoints::Gen3DMapPoints(int xPoints,int yPoints){
         m_xPoint = xPoints;
         m_yPoint = yPoints;
     }
-    m_showKingdom = false;
-    m_showMountain = false;
-    m_showRiver = true;
-    m_showTemperature = false;
-    m_fillColor = true;
-    m_unit = 10000;
-
 }
 Gen3DMapPoints::Gen3DMapPoints()
 {
+    init();
     m_un = 1;
-    m_showKingdom = false;
-    m_showMountain = false;
-    m_showRiver = false;
-    m_showTemperature = false;
-    m_fillColor = true;
     m_singleLand = false;
-    m_unit = 10000;
     m_xPoint = 100 + 1;//81 points,80 edges
     m_yPoint = 50 + 1;//41个点，40条边
     m_coastDir = CoastFrame;//it means world map
+
     /*
         这个网格的总数对后面自动计算的推荐标高是有影响的,当网格总数(m_xPoint * m_yPoint)越大,
         推荐的标高切出的陆地面积占比越小.因为网格数量大了,鼓锤的次数就多了,最大最小标高之间的值
@@ -1502,6 +1477,7 @@ void Gen3DMapPoints::getPointsInSunShape(QList<Point*> & resList,const Point* ce
 }
 
 void Gen3DMapPoints::shrink(QList<QList<Point*> > & pathList , int scale){
+    m_shrinkScale = scale;
     set<Point*> visit;
     for(int i = 0;i<pathList.size();++i){
         QList<Point*> & path = pathList[i];
@@ -1754,12 +1730,18 @@ QList<Point*> Gen3DMapPoints::nextFramePath(Point* cur,const QList<Point*>& srcL
         getPointsInSunShape(nextList,cur,srcList);
         if(nextList.size() == 1){
             printf("nextList.size = 1,nxt:%s\n",nextList[0]->str().toStdString().c_str());
-            path.push_back(nextList[0]);
-            visit.insert(nextList[0]);
-            cur = nextList[0];
-            if(path.size() > 2) break;
+
+            if(path.size() > 2) break;//cur已经是出口点了
+            else{
+                //cur是入口点
+                path.push_back(nextList[0]);
+                visit.insert(nextList[0]);
+                cur = nextList[0];
+            }
+
         }
         else if(nextList.size() == 2){
+            next = NULL;
             if(path.count(nextList[0]) <= 0) next = nextList[0];
             else if(path.count(nextList[1]) <= 0) next = nextList[1];
             else{
@@ -1837,6 +1819,22 @@ QList<Point*> Gen3DMapPoints::nextFramePath(Point* cur,const QList<Point*>& srcL
     }
     return path;
 }
+void Gen3DMapPoints::log(const QList<Point*> & path,QString fn,bool hasZ){
+    QString data;
+    for(int i = 0;i < path.size();++i){
+        const Point* p = path.at(i);
+        if(!p) continue;
+        if(!hasZ)
+            data += "Point:" + p->str() + " ; ";
+        else
+            data += "Point:" + p->toStr() + " ; ";
+    }
+    QFile f("D:\\shensheng\\_ToRep\\ProjectA\\logs/" + fn + ".txt");
+    bool ok = f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    printf("ok = %s\n",ok?"true":"false");
+    f.write(data.toLocal8Bit());
+    f.close();
+}
 void Gen3DMapPoints::print(const QList<Point*> & path){
     QString data;
     for(int i = 0;i < path.size();++i){
@@ -1845,6 +1843,40 @@ void Gen3DMapPoints::print(const QList<Point*> & path){
         data += "Point:" + p->str() + " ; ";
     }
     printf("path:  %s\n",data.toStdString().c_str());
+}
+void Gen3DMapPoints::getFrame(QList<Point*> & rawFrame){
+    //all clockwise
+    rawFrame.clear();
+    if(m_coastDir == CoastEast || CoastSouth == m_coastDir || CoastSouthEast == m_coastDir ||
+            CoastFrame == m_coastDir || CoastNone == m_coastDir){
+        //start from left-up corner
+        for(int i = 0;i<m_xPoint;++i)rawFrame << m_pArr[i][0];
+        for(int i = 1;i<m_yPoint;++i)rawFrame << m_pArr[m_xPoint - 1][i];
+        for(int i = m_xPoint - 2;i>=0;--i) rawFrame << m_pArr[i][m_yPoint - 1];
+        for(int i = m_yPoint - 2;i>=1;--i) rawFrame << m_pArr[0][i];
+    }
+    else if(m_coastDir == CoastWest || CoastNorth == m_coastDir || CoastNorthWest == m_coastDir){
+        //start from right-bottom corner
+        for(int i = m_xPoint - 1;i >= 0; --i) rawFrame << m_pArr[i][m_yPoint - 1];
+        for(int i = m_yPoint - 2;i >= 0; --i) rawFrame << m_pArr[0][i];
+        for(int i = 1;i < m_xPoint;++i) rawFrame << m_pArr[i][0];
+        for(int i = 1;i < m_yPoint - 1;++i) rawFrame << m_pArr[m_xPoint-1][i];
+
+    }
+    else if( CoastSouthWest == m_coastDir){
+        //start from right-up corner
+        for(int i = 0;i < m_yPoint;++i) rawFrame << m_pArr[m_xPoint - 1][i];
+        for(int i = m_xPoint - 2;i >= 0; --i) rawFrame << m_pArr[i][m_yPoint - 1];
+        for(int i = m_yPoint - 2;i >= 0; --i) rawFrame << m_pArr[0][i];
+        for(int i = 1;i < m_xPoint - 1; ++i) rawFrame << m_pArr[i][0];
+    }
+    else if( CoastNorthEast == m_coastDir){
+        //start from left-bottom corner
+        for(int i = m_yPoint - 1;i>=0 ;--i) rawFrame << m_pArr[0][i];
+        for(int i = 1;i < m_xPoint; ++i) rawFrame << m_pArr[i][0];
+        for(int i = 1;i < m_yPoint; ++i) rawFrame << m_pArr[m_xPoint - 1][i];
+        for(int i = m_xPoint - 2;i >=1;--i) rawFrame << m_pArr[i][m_yPoint - 1];
+    }
 }
 void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList){
     if(CoastNone == m_coastDir){
@@ -1863,27 +1895,9 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
         //第1步:把边框连起来
         QList<Point*> frame;
         QList<Point*> rawFrame;
-        for(int i = 0;i<m_xPoint;++i)rawFrame << m_pArr[i][0];
-        for(int i = 1;i<m_yPoint;++i)rawFrame << m_pArr[m_xPoint - 1][i];
-        for(int i = m_xPoint - 2;i>=0;--i) rawFrame << m_pArr[i][m_yPoint - 1];
-        for(int i = m_yPoint - 2;i>=1;--i) rawFrame << m_pArr[0][i];
-        int startIdx = 0;
-        for(int i = 0;i<rawFrame.size();++i){
-            if(rawFrame[i]->m_z > m_z){
-                startIdx = i;
-                break;
-            }
-        }
-        printf("rawFrame.size = %d\n",rawFrame.size());
-        if(startIdx > 0){
-            QList<Point*> lowPart = rawFrame.mid(0,startIdx);
-            for(int i = 0;i<startIdx;++i) rawFrame.removeAt(0);
-            rawFrame += lowPart; //make sure first node is land
-            printf("after concat,rawFrame.size = %d\n",rawFrame.size());
-        }
-        printf("@@@@@@@@@@@@@@@@@@@\n");
-        print(rawFrame);
-        printf("@@@@@@@@@@@@@@@@@@@\n");
+        getFrame(rawFrame);
+
+        log(rawFrame);
         Point* cur = rawFrame[0];
         std::set<Point*> frameVisit;
         while(cur){
@@ -1900,11 +1914,10 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
                 frame += framePath;
                 cur = nextFrameNode(framePath[framePath.size() - 1]);
                 //print(framePath);
-                printf("cur : %s\n",cur ? cur->str().toStdString().c_str() : "NULL");
+                printf("cur : %s\n",cur ? cur->toStr().toStdString().c_str() : "NULL");
             }
             else{
             }
-            printf("frame.size = %d\n",frame.size());
         }
         for(int i = 0;i< frame.size();++i){
             leftContourPointList.removeOne(frame[i]);
@@ -2262,7 +2275,7 @@ void Gen3DMapPoints::createTiltArr(){
     //minForceFactor = 0.05,maxForceFactor = 0.2;
     const float gapUnit = 0.08 * m_unit;
     if(m_coastDir == CoastNone || CoastEast == m_coastDir){
-        //西高东低
+        //海岸线在东侧
         for(int i = 0;i<m_xPoint;++i){
             for(int j = 0;j< m_yPoint;++j){
                 m_pArr[i][j]->m_z += (m_xPoint - 1 - i) * gapUnit;
@@ -2270,7 +2283,7 @@ void Gen3DMapPoints::createTiltArr(){
         }
     }
     else if(m_coastDir == CoastWest){
-        //西低
+        //西侧
         for(int i = 0;i<m_xPoint;++i){
             for(int j = 0;j< m_yPoint;++j){
                 m_pArr[i][j]->m_z += i * gapUnit;
@@ -2287,7 +2300,7 @@ void Gen3DMapPoints::createTiltArr(){
     else if(m_coastDir == CoastSouth){
         for(int i = 0;i<m_xPoint;++i){
             for(int j = 0;j< m_yPoint;++j){
-                m_pArr[i][j]->m_z += (m_yPoint - 1 - i) * gapUnit;
+                m_pArr[i][j]->m_z += (m_yPoint - 1 - j) * gapUnit;
             }
         }
     }
@@ -2373,6 +2386,8 @@ void Gen3DMapPoints::drum(int times,float minForceFactor,float maxForceFactor){
         那么我从第四行，第四列开始的区域中找作用点，右侧和下方也是如此。这样可以保证四周一圈的标高比较低,
         但不一定是0 , 因为m_affectList.size()大概是13,也就是有外圈12层受到作用力的影响。
     */
+    if(m_coastDir != CoastFrame) margin = 0;
+    /* 生成有海岸线的局部地图时,边框也需要锤一锤,否则海岸线两侧会有明显的边框的痕迹 */
     x1 = margin;
     x2 -= margin;
     y1 = margin;

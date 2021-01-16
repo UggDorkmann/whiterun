@@ -19,9 +19,6 @@ long long g_visitCnt = 0;
 extern FileLogger* logger;
 static ThreadStat * g_statThread = NULL;
 static QByteArray g_ba_index_html;
-//static QByteArray g_ba_randomMap_html;
-//static QByteArray g_ba_randomName_html;
-//static QByteArray g_ba_randomNickname_html;
 static QByteArray g_ba_favicon_ico;
 static QByteArray g_ba_randMap_png;
 static QByteArray g_ba_logo_png;
@@ -287,9 +284,9 @@ void RequestHandler::service(HttpRequest& request, HttpResponse& response)
         gm->m_showTemperature = showTemperature;
 
         QString resPath = gm->generateNewRegion(idx);
-//#ifdef WIN32
-//        gm->saveMeshData();
-//#endif
+#ifdef WIN32
+        gm->saveMeshData();
+#endif
         delete gm;
         QFile f(resPath);
         bool ok = f.open(QIODevice::ReadOnly);
