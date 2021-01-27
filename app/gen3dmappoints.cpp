@@ -792,7 +792,7 @@ Point* Gen3DMapPoints::getNextRiverNode(Point* cur,int cut){
 void Gen3DMapPoints::createRegion(){
     int times = m_xPoint * m_yPoint / 5;
     drum(times,0.05,0.2);
-    getz();
+    //getz();
     getContourPoints(m_contourPointList,m_z);
     log(m_contourPointList,"contourPoints");
     printf("m_contourPointList.size =%d,total size =%d,percent=%f\n",m_contourPointList.size(),
@@ -1829,7 +1829,7 @@ void Gen3DMapPoints::log(const QList<Point*> & path,QString fn,bool hasZ){
         else
             data += "Point:" + p->toStr() + " ; ";
     }
-    QFile f("D:\\shensheng\\_ToRep\\ProjectA\\logs/" + fn + ".txt");
+    QFile f(g_projectAPath +  "/logs/" + fn + ".txt");
     bool ok = f.open(QIODevice::WriteOnly | QIODevice::Truncate);
     printf("ok = %s\n",ok?"true":"false");
     f.write(data.toLocal8Bit());
@@ -1889,7 +1889,6 @@ void Gen3DMapPoints::getContourPathsForRegion(QList< QList<Point*> > & pathList)
         pathList << frame;
     }
     else{
-
         QList<Point*> leftContourPointList = m_contourPointList;
 
         //第1步:把边框连起来
@@ -2325,6 +2324,85 @@ void Gen3DMapPoints::createTiltArr(){
             y0 = 0;
         }
         float dis;
+        int w = m_xPoint - 1;
+        int h = m_yPoint - 1;
+        float maxDis = w * h * 2 / sqrt(w * w + h * h);
+        for(int i = 0;i<m_xPoint;++i){
+            for(int j = 0;j< m_yPoint;++j){
+                dis = fabs((-1 * k * i + j + k * x0 - y0) / sqrt(k*k + 1));
+                //m_pArr[i][j]->m_z -= dis * gapUnit;
+                m_pArr[i][j]->m_z += (maxDis - dis) * gapUnit;
+            }
+        }
+    }
+
+}
+int Gen3DMapPoints::getz(int idxx,int idxy){
+    int z = 0;
+    static const float gapUnit = 0.08 * m_unit;
+    /*
+     *  剖面上的水面切线是3条线段连成的折线,海拔高的切线是水平段,中间段的带有坡度,最低段的是水平线
+     *  如果是CoastFrame,会照着CoastEast来实现,这时这个水面切线是一条有坡度线段,而不是现在的水平线,后期实现
+    */
+    static const float thickLeftH = 1 - 0.4;//0.4是高地减去的厚度
+    static const float thickLeftL = 1 - 0.2;//0.2是低地减去的厚度
+    if(m_coastDir == CoastNone || CoastEast == m_coastDir){
+        //海岸线在东侧
+        float h = 20 * m_unit + 0.85 * m_xPoint * gapUnit * thickLeftH;
+        float l = 20 * m_unit + 0.15 * m_xPoint * gapUnit * thickLeftL;
+        if(idxx <= 0.15 * m_xPoint){
+            return h;
+        }
+        else if(idxx <= 0.85 * m_xPoint){
+            return h - (idxx - 0.15 * m_xPoint) / (0.7 * m_xPoint) * (h - l);
+        }
+        else{
+            return l;
+        }
+    }
+    else if(m_coastDir == CoastWest){
+        //西侧
+        float h = 20 * m_unit + 0.85 * m_xPoint * gapUnit * thickLeftH;
+        float l = 20 * m_unit + 0.15 * m_xPoint * gapUnit * thickLeftL;
+        if(idxx <= 0.15 * m_xPoint){
+            return l;
+        }
+        else if(idxx <= 0.85 * m_xPoint){
+            return h - (0.85 * m_xPoint - idxx) / (0.7 * m_xPoint) * (h - l);
+        }
+        else{
+            return h;
+        }
+    }
+    else if(m_coastDir == CoastNorth){
+        float h = 20 * m_unit + 0.85 * m_yPoint * gapUnit * thickLeftH;
+        float l = 20 * m_unit + 0.15 * m_yPoint * gapUnit * thickLeftL;
+
+    }
+    else if(m_coastDir == CoastSouth){
+
+    }
+    else{
+        float k = (m_yPoint - 1) * 1.0 / (m_xPoint - 1);
+        if(m_coastDir == CoastNorthWest || CoastSouthEast == m_coastDir) k *= -1;
+        float x0,y0;//(x0,y0)所在的点是标高最大的
+        if(m_coastDir == CoastNorthEast){
+            x0 = 0;
+            y0 = m_yPoint - 1;
+        }
+        else if(m_coastDir == CoastNorthWest){
+            x0 = m_xPoint - 1;
+            y0 = m_yPoint - 1;
+        }
+        else if(m_coastDir == CoastSouthEast){
+            x0 = 0;
+            y0 = 0;
+        }
+        else{//CoastSouthWest
+            x0 = m_xPoint - 1;
+            y0 = 0;
+        }
+        float dis;
         float offset = 0.08 * m_unit;
         for(int i = 0;i<m_xPoint;++i){
             for(int j = 0;j< m_yPoint;++j){
@@ -2333,9 +2411,7 @@ void Gen3DMapPoints::createTiltArr(){
             }
         }
     }
-
 }
-
 void Gen3DMapPoints::createArr(){
     if(m_pArr.size() > 0){
         clearArr();

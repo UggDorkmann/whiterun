@@ -206,6 +206,8 @@ private:
     /*获得推荐的等高线标高*/
     void getz();
 
+    int getz(int idxx,int idxy);
+
     /* 获取倒过角的QPainterPath */
     void getFilletPath(const QList<Point*> & path,QPainterPath & pp);
 
